@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>دونده فیثاغورث - با رکورد</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap');
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Vazirmatn', sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; user-select: none; -webkit-user-select: none; touch-action: none; }
+        #game-container { position: relative; width: 100%; height: 100%; background-color: #87CEEB; overflow: hidden; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #hud-layer { position: absolute; top: 10px; left: 0; width: 100%; padding: 0 15px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; z-index: 30; pointer-events: none; }
+        
+        /* استایل جدید برای گروه امتیازها */
+        .hud-group { display: flex; gap: 10px; }
+        .hud-item { background: rgba(255, 255, 255, 0.9); padding: 5px 15px; border-radius: 20px; font-size: 18px; font-weight: bold; color: #333; box-shadow: 0 2px 5px rgba(0,0,0,0.2); border: 2px solid #fff; }
+        
+        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 50; color: white; text-align: center; }
+        #game-over-screen h1 { margin: 0 0 10px 0; font-size: 36px; color: #ff5252; }
+        #game-over-screen p { font-size: 20px; margin-bottom: 30px; }
+        #btn-restart { background: #4CAF50; color: white; border: none; padding: 12px 30px; font-size: 18px; border-radius: 50px; font-family: 'Vazirmatn', sans-serif; cursor: pointer; box-shadow: 0 4px 0 #2E7D32; }
+        #btn-restart:active { transform: translateY(3px); box-shadow: 0 1px 0 #2E7D32; }
+        #input-overlay { position: absolute; top: 15%; left: 50%; transform: translate(-50%, 0); display: none; z-index: 20; text-align: center; width: 100%; pointer-events: none; }
+        .radical-wrapper { background: rgba(255, 255, 255, 0.95); padding: 8px 16px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); display: inline-flex; align-items: center; gap: 10px; direction: ltr; pointer-events: auto; border: 2px solid #333; }
+        .radical-symbol { font-size: 26px; font-weight: bold; color: #333; }
+        #answer-input { font-family: 'Vazirmatn', sans-serif; font-size: 22px; width: 60px; border: none; border-top: 2px solid #333; outline: none; padding: 4px; background: transparent; text-align: center; font-weight: bold; color: #2c3e50; }
+        #btn-submit { background-color: #4CAF50; color: white; border: none; padding: 6px 12px; border-radius: 8px; font-family: 'Vazirmatn', sans-serif; font-size: 14px; cursor: pointer; box-shadow: 0 3px 0 #2e7d32; }
+        #touch-controls { position: absolute; bottom: 30px; right: 30px; z-index: 10; }
+        #btn-run { width: 80px; height: 80px; background-color: #ff9800; color: white; border: 4px solid #fff; border-radius: 50%; font-size: 32px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; outline: none; -webkit-tap-highlight-color: transparent; }
+        #btn-run:active, #btn-run.pressed { transform: scale(0.95); background-color: #f57c00; }
+        #flash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: red; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 15; }
+        .tutorial-text { position: absolute; bottom: 30px; left: 20px; color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 14px; pointer-events: none; opacity: 0.8; background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="flash-overlay"></div>
+        <div id="hud-layer">
+            <div class="hud-item" id="lives-txt">❤️❤️❤️</div>
+            <div class="hud-group">
+                <div class="hud-item" id="score-txt">امتیاز: ۰</div>
+                <div class="hud-item" style="background:#fff3cd; color:#856404;" id="highscore-txt">رکورد: ۰</div>
+            </div>
+        </div>
+        <div id="game-over-screen">
+            <h1>بازی تمام شد!</h1>
+            <p id="final-score-txt">امتیاز شما: ۰</p>
+            <button id="btn-restart" onclick="restartGame()">شروع دوباره</button>
+        </div>
+        <div id="input-overlay">
+            <div class="radical-wrapper">
+                <span class="radical-symbol">√</span>
+                <input type="number" id="answer-input" placeholder="؟" autocomplete="off">
+                <button id="btn-submit" onclick="checkAnswer()">بپر!</button>
+            </div>
+        </div>
+        <div id="touch-controls"><button id="btn-run">🏃</button></div>
+        <div class="tutorial-text">دکمه 🏃 را نگه دارید</div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const UNIT = 40; 
+    let BASE_GROUND_Y = 300; 
+    let score = 0;
+    let lives = 3;
+    // --- متغیر رکورد ---
+    let highScore = parseInt(localStorage.getItem('pythagoras_highscore')) || 0;
+
+    let gameState = 'RUNNING_TO_WALL'; 
+    let cameraX = 0;
+    const player = { x: 0, y: 0, vx: 0, vy: 0, speed: 7, frame: 0 };
+    let obstacles = [];
+    let obstacleIdCounter = 0;
+
+    function updateHUD() {
+        document.getElementById('score-txt').innerText = "امتیاز: " + score;
+        document.getElementById('highscore-txt').innerText = "رکورد: " + highScore; // نمایش رکورد
+        let h = ""; for(let i=0; i<lives; i++) h += "❤️";
+        if(lives === 0) h = "💔";
+        document.getElementById('lives-txt').innerText = h;
+    }
+
+    function showGameOver() {
+        // --- ذخیره رکورد در صورت شکستن ---
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('pythagoras_highscore', highScore);
+        }
+        updateHUD(); // به‌روزرسانی نمایش
+        
+        document.getElementById('final-score-txt').innerText = "امتیاز شما: " + score;
+        document.getElementById('game-over-screen').style.display = 'flex';
+        document.getElementById('input-overlay').style.display = 'none';
+        document.getElementById('touch-controls').style.display = 'none';
+    }
+
+    // --- اصلاح مهم: ریست کامل ---
+    function restartGame() {
+        score = 0; lives = 3; updateHUD();
+        obstacles = []; obstacleIdCounter = 0;
+        player.x = 0; player.vx = 0; player.frame = 0;
+        player.y = 0; // این خط حیاتی است برای اصلاح باگ شروع دوباره
+        cameraX = 0;
+        gameState = 'RUNNING_TO_WALL';
+        generateObstacle(0);
+        resizeCanvas();
+        document.getElementById('game-over-screen').style.display = 'none';
+        document.getElementById('touch-controls').style.display = 'block';
+    }
+
+    function resizeCanvas() {
+        if (!canvas.parentElement) return;
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+        const newGroundY = canvas.height * 0.45; 
+        if (gameState !== 'GAME_OVER') {
+            if (player.y === 0) { player.y = newGroundY; } 
+            else { const diff = newGroundY - BASE_GROUND_Y; player.y += diff; }
+        }
+        BASE_GROUND_Y = newGroundY;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas(); generateObstacle(0); updateHUD();
+
+    function generateObstacle(lastX) {
+        const gap1 = Math.floor(Math.random() * 5) + 3; 
+        const h = Math.floor(Math.random() * 4) + 2;    
+        const gap2 = Math.floor(Math.random() * 5) + 3; 
+        const startX = lastX + 500; 
+        obstacles.push({ id: obstacleIdCounter++, startX: startX, gapUp: gap1, wallHeight: h, gapDown: gap2, wallStartX: startX + (gap1 * UNIT), wallRunLen: 200, wallEndX: startX + (gap1 * UNIT) + 200, landStartX: startX + (gap1 * UNIT) + 200 + (gap2 * UNIT), solvedUp: false, solvedDown: false });
+    }
+    let keyRight = false; const btnRun = document.getElementById('btn-run');
+    const startRun = (e) => {
+        if(e.cancelable) e.preventDefault();
+        if(!gameState.includes('JUMPING') && !gameState.includes('WAITING') && lives > 0) { keyRight = true; btnRun.classList.add('pressed'); }
+    };
+    const stopRun = (e) => { if(e.cancelable) e.preventDefault(); keyRight = false; btnRun.classList.remove('pressed'); };
+    btnRun.addEventListener('mousedown', startRun); btnRun.addEventListener('touchstart', startRun, {passive: false});
+    btnRun.addEventListener('mouseup', stopRun); btnRun.addEventListener('mouseleave', stopRun); btnRun.addEventListener('touchend', stopRun);
+    window.addEventListener('keydown', (e) => { if(e.key === "ArrowRight") keyRight = true; if(e.key === "Enter" && gameState.includes('WAITING')) checkAnswer(); });
+    window.addEventListener('keyup', (e) => { if(e.key === "ArrowRight") keyRight = false; });
+    window.addEventListener('scroll', () => window.scrollTo(0,0));
+
+    function checkAnswer() {
+        const input = document.getElementById('answer-input'); if (!input.value) return;
+        const val = parseInt(input.value); const obs = obstacles[0]; if(!obs) return;
+        let correct = 0; let isPhase1 = false; 
+        if (gameState === 'WAITING_WALL') { correct = (obs.gapUp ** 2) + (obs.wallHeight ** 2); isPhase1 = true; }
+        else if (gameState === 'WAITING_DOWN') { correct = (obs.gapDown ** 2) + (obs.wallHeight ** 2); isPhase1 = false; }
+        hideInput();
+        if (val === correct) {
+            score += 10; updateHUD();
+            if (isPhase1) { obs.solvedUp = true; gameState = 'JUMPING_TO_WALL'; performJump(obs, true, true); }
+            else { obs.solvedDown = true; gameState = 'JUMPING_DOWN'; performJump(obs, true, false); }
+        } else {
+            lives--; updateHUD(); input.value = ''; performJump(obs, false, isPhase1); 
+        }
+    }
+    function hideInput() {
+        const overlay = document.getElementById('input-overlay'); overlay.style.display = 'none';
+        document.getElementById('answer-input').blur(); keyRight = false; btnRun.classList.remove('pressed');
+    }
+    function showInput() {
+        const overlay = document.getElementById('input-overlay'); const input = document.getElementById('answer-input');
+        input.value = ''; overlay.style.display = 'block'; window.scrollTo(0,0); input.focus();
+        keyRight = false; btnRun.classList.remove('pressed');
+    }
+
+    function performJump(obs, success, isAscending) {
+        const startX = player.x; const startY = player.y; let targetX, targetY;
+        if (isAscending) { targetX = obs.wallStartX + 40; targetY = BASE_GROUND_Y - (obs.wallHeight * UNIT); }
+        else { targetX = obs.landStartX + 40; targetY = BASE_GROUND_Y; }
+        let progress = 0; const duration = success ? 60 : 45; 
+        const animate = () => {
+            progress += 1 / duration; if (progress > 1) progress = 1;
+            if (success) {
+                player.x = startX + (targetX - startX) * progress;
+                const linearY = startY + (targetY - startY) * progress;
+                const arcHeight = isAscending ? 180 : 100;
+                player.y = linearY - (arcHeight * Math.sin(progress * Math.PI));
+            } else {
+                const failDist = (targetX - startX) * 0.5; player.x = startX + failDist * progress; 
+                const arc = 60 * Math.sin(progress * Math.PI); player.y = startY - arc + (progress * progress * 300); 
+            }
+            if (progress < 1) { requestAnimationFrame(animate); }
+            else {
+                if (success) {
+                    player.y = targetY;
+                    if (isAscending) { gameState = 'RUNNING_ON_WALL'; }
+                    else { gameState = 'RUNNING_TO_WALL'; obstacles.shift(); generateObstacle(player.x); }
+                } else {
+                    if (lives <= 0) { showGameOver(); } else { triggerFailEffect(obs, isAscending); }
+                }
+            }
+        }; requestAnimationFrame(animate);
+    }
+
+    function triggerFailEffect(obs, isAscending) {
+        const flash = document.getElementById('flash-overlay'); flash.style.opacity = '0.3';
+        setTimeout(() => flash.style.opacity = '0', 200);
+        setTimeout(() => {
+            if (isAscending) { player.x = obs.startX - 20; player.y = BASE_GROUND_Y; gameState = 'WAITING_WALL'; }
+            else { player.x = obs.wallEndX - 20; player.y = BASE_GROUND_Y - (obs.wallHeight * UNIT); gameState = 'WAITING_DOWN'; }
+            showInput();
+        }, 300);
+    }
+
+    function update() {
+        if (gameState === 'RUNNING_TO_WALL' || gameState === 'RUNNING_ON_WALL') {
+            if (keyRight) { player.vx = player.speed; player.frame++; } else { player.vx = 0; player.frame = 0; }
+            player.x += player.vx;
+        }
+        const obs = obstacles[0];
+        let targetCamX = 0;
+        if (obs && (gameState.includes('WAITING'))) {
+            let center;
+            if (gameState === 'WAITING_WALL') center = (obs.startX + obs.wallStartX) / 2;
+            else center = (obs.wallEndX + obs.landStartX) / 2;
+            targetCamX = center - (canvas.width / 2);
+        } else { targetCamX = player.x - 100; }
+        cameraX += (targetCamX - cameraX) * 0.1;
+        
+        if (!obs) return;
+        if (gameState === 'RUNNING_TO_WALL') {
+            if (player.x >= obs.startX - 20) { player.x = obs.startX - 20; player.vx = 0; gameState = 'WAITING_WALL'; showInput(); }
+        }
+        if (gameState === 'RUNNING_ON_WALL') {
+            if (player.x >= obs.wallEndX - 20) { player.x = obs.wallEndX - 20; player.vx = 0; gameState = 'WAITING_DOWN'; showInput(); }
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(-cameraX, 0);
+        ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(cameraX + canvas.width - 60, 80, 45, 0, Math.PI * 2); ctx.fill();
+
+        obstacles.forEach(obs => {
+            drawGround(obs.startX - 2000, obs.startX); 
+            const wallTopY = BASE_GROUND_Y - (obs.wallHeight * UNIT);
+            drawWall(obs.wallStartX, wallTopY, obs.wallRunLen, 1000);
+            drawGround(obs.landStartX, obs.landStartX + 2000);
+
+            if (gameState === 'WAITING_WALL' && !obs.solvedUp) { drawDimensions(obs.startX, obs.wallStartX, wallTopY, obs.gapUp, obs.wallHeight, true); }
+            if (gameState === 'WAITING_DOWN' && !obs.solvedDown) { drawDimensions(obs.wallEndX, obs.landStartX, wallTopY, obs.gapDown, obs.wallHeight, false); }
+        });
+        drawPlayer(player.x, player.y); ctx.restore();
+    }
+
+    function drawGround(start, end) {
+        if (start >= end) return;
+        ctx.fillStyle = "#4CAF50"; ctx.fillRect(start, BASE_GROUND_Y, end - start, 1000); 
+        ctx.strokeStyle = "#388E3C"; ctx.lineWidth = 2; let p = Math.floor(start/40)*40;
+        for(let i=p; i<end; i+=40) { ctx.beginPath(); ctx.moveTo(i, BASE_GROUND_Y); ctx.lineTo(i+5, BASE_GROUND_Y - 10); ctx.stroke(); }
+    }
+
+    function drawWall(x, y, w, h) {
+        ctx.fillStyle = "#795548"; ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = "#4CAF50"; ctx.fillRect(x, y, w, 15);
+        ctx.strokeStyle = "rgba(0,0,0,0.2)"; ctx.strokeRect(x, y, w, h);
+    }
+
+    function drawDimensions(x1, x2, wallTopY, gapVal, hVal, isAscending) {
+        ctx.fillStyle = "black"; ctx.font = "bold 22px Vazirmatn"; ctx.textAlign = "center";
+        const textY_Gap = isAscending ? BASE_GROUND_Y + 35 : wallTopY + 35;
+        const lineY_Gap = isAscending ? BASE_GROUND_Y + 10 : wallTopY + 10; 
+        ctx.beginPath(); ctx.moveTo(x1, lineY_Gap); ctx.lineTo(x2, lineY_Gap); ctx.stroke(); ctx.fillText(gapVal, (x1 + x2)/2, textY_Gap);
+        
+        const vLineX = x2 - 15; const vTop = wallTopY; const vBot = BASE_GROUND_Y;
+        ctx.setLineDash([8, 5]); ctx.beginPath(); ctx.moveTo(vLineX, vBot); ctx.lineTo(vLineX, vTop); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillText(hVal, vLineX - 30, (vTop + vBot)/2 + 10);
+
+        ctx.strokeStyle = "#ff0000"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(player.x, player.y);
+        const destX = x2; const destY = isAscending ? wallTopY : BASE_GROUND_Y;
+        ctx.lineTo(destX, destY); ctx.stroke();
+        ctx.fillStyle = "#ff0000"; const midX = (player.x + destX) / 2; const midY = (player.y + destY) / 2;
+        ctx.fillText("؟", midX, midY - 20);
+    }
+
+    function drawPlayer(x, y) {
+        ctx.save(); ctx.translate(x, y);
+        const swing = (gameState.includes('RUNNING')) ? Math.sin(player.frame * 0.4) : 0;
+        const legA = swing * 0.8; const armA = -swing * 0.8;
+        ctx.strokeStyle = "#e74c3c"; ctx.lineWidth = 12; ctx.lineCap = "round";
+        drawLimb(0, -35, 18, legA, "#2c3e50"); drawLimb(0, -35, 18, -legA, "#2c3e50"); 
+        ctx.beginPath(); ctx.moveTo(0, -35); ctx.lineTo(0, -65); ctx.stroke();
+        ctx.fillStyle = "#ffccaa"; ctx.beginPath(); ctx.arc(0, -75, 9, 0, Math.PI*2); ctx.fill();
+        drawLimb(0, -65, 18, armA, "#ffccaa"); drawLimb(0, -65, 18, -armA, "#ffccaa");
+        ctx.restore();
+    }
+
+    function drawLimb(x, y, len, ang, color) {
+        ctx.strokeStyle = color; const ex = x + Math.sin(ang) * len; const ey = y + Math.cos(ang) * len;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey);
+        const footA = ang + 0.2; const fx = ex + Math.sin(footA) * len; const fy = ey + Math.cos(footA) * len;
+        ctx.lineTo(fx, fy); ctx.stroke();
+    }
+
+    function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+    requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
